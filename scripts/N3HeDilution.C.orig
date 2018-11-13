@@ -1,0 +1,315 @@
+#include <math.h>
+
+
+class DataMatrix{
+
+  int rows;
+  int cols;
+  double error = 1e15;
+
+public:
+
+  double **m;
+
+  DataMatrix(int r, int c) {
+    
+    rows = r;
+    cols = c;
+    
+    m = new double*[rows];
+    for(int i = 0; i < rows; i ++)
+      m[i] = new double[cols];
+  }
+  ~DataMatrix() {
+
+    for(int i = 0; i < rows; ++i) {
+      delete [] m[i];
+    }
+    
+    delete [] m;
+  }
+  
+  void SetElement(int r, int c, double val = 0.0){
+    if(r < 0 || r >= rows) return;
+    if(c < 0 || c >= cols) return;
+      
+    m[r][c] = val;
+  }
+  void AddToElement(int r, int c, double val = 0.0){
+    if(r < 0 || r >= rows) return;
+    if(c < 0 || c >= cols) return;
+      
+    m[r][c] += val;
+  }
+
+  double GetElement(int r, int c){
+    if(r < 0 || r >= rows) return error;
+    if(c < 0 || c >= cols) return error;
+    return m[r][c];
+  }
+
+};
+
+//This is a modified Numerical Recipes routine used here for matrix inversion 
+
+//   Linear equation solution by Gauss-Jordan elimination. a[0..n-1][0..n-1]
+//   is the input matrix. A[0..n-1][0..m-1] is input containing the m right-hand side vectors. On
+//   output, a is replaced by its matrix inverse, and b is replaced by the corresponding set of solution
+//   vectors. 
+
+void gaussj(DataMatrix *A, int n, DataMatrix *B, int m)
+{
+  int *indxc,*indxr,*ipiv;
+  int i,icol,irow,j,k,l,ll;
+  double big,dum,pivinv,temp;
+
+  indxc = new int[n];     //The integer arrays ipiv, indxr, and indxc are 
+  indxr = new int[n];     //used for bookkeeping on the pivoting.         
+  ipiv  = new int[n];
+
+  for (j=0;j<n;j++) ipiv[j]=0;
+  for (i=0;i<n;i++) {                       //This is the main loop over the columns to be reduced.   
+    big=0.0;                   		     
+    for (j=0;j< n;j++)                     //This is the outer loop of the search for a pivot element.
+      if (ipiv[j] != 1)                
+	for (k=0;k< n;k++) {
+	  if (ipiv[k] == 0) {
+	    if (fabs(A->m[j][k]) >= big) {
+	      big=fabs(A->m[j][k]);
+	      irow=j;
+	      icol=k;
+	    }
+	  }
+	}
+    ++(ipiv[icol]);
+    /*    We now have the pivot element, so we interchange rows, if needed, to put the pivot
+	  element on the diagonal. The columns are not physically interchanged, only relabeled:
+	  indxc[i], the column of the ith pivot element, is the ith column that is reduced, while
+	  indxr[i] is the row in which that pivot element was originally located. If indxr[i] does not equal
+	  indxc[i] there is an implied column interchange. With this form of bookkeeping, the
+	  solution b's will end up in the correct order, and the inverse matrix will be scrambled
+	  by columns.*/
+
+    if (irow != icol) {
+      for (l=0;l< n;l++) { temp = A->m[irow][l]; A->m[irow][l] = A->m[icol][l]; A->m[icol][l] = temp; };
+      for (l=0;l< m;l++) { temp = B->m[irow][l]; B->m[irow][l] = B->m[icol][l]; B->m[icol][l] = temp; };
+    }
+    indxr[i]=irow;                                                             //We are now ready to divide the pivot row by the
+    indxc[i]=icol;                                                             //pivot element, located at irow and icol.
+    if (A->m[icol][icol] == 0.0){ 
+      cout << "This matrix is singular and does not have an inverse!" << endl << "Stopping ..." << endl;
+      exit(1);
+    }
+    pivinv=1.0/A->m[icol][icol];
+    A->m[icol][icol]=1.0;
+    for (l=0;l< n;l++) A->m[icol][l] *= pivinv;
+    for (l=0;l< m;l++) B->m[icol][l] *= pivinv; 
+    
+    for (ll=0;ll< n;ll++)                                                       //Next, we reduce the rows...
+      if (ll != icol) {                                                         //...except for the pivot one, of course.
+	dum=A->m[ll][icol];
+	A->m[ll][icol]=0.0;
+	for (l=0;l< n;l++) A->m[ll][l] -= A->m[icol][l]*dum;
+	for (l=0;l< m;l++) B->m[ll][l] -= B->m[icol][l]*dum;
+      }
+    cout << " i = " << i << endl;
+  }
+  /*This is the end of the main loop over columns of the reduction. It only remains to unscramble
+the solution in view of the column interchanges. We do this by interchanging pairs of
+columns in the reverse order that the permutation was built up.*/
+  for (l=n-1;l>=0;l--) {
+    if (indxr[l] != indxc[l])
+      for (k=0;k< n;k++){
+	temp = A->m[k][indxr[l]];
+	A->m[k][indxr[l]] = A->m[k][indxc[l]];
+	A->m[k][indxc[l]] = temp;
+	// SWAP(A->m[k][indxr[l]],A->m[k][indxc[l]]);
+      }
+  } //And we are done.
+
+  delete[] ipiv;
+  delete[] indxr;
+  delete[] indxc;
+}
+
+
+void analyze(const char *FileName)
+{
+  gStyle->SetPalette(1);
+  
+  TFile f2(FileName,"READ");
+  TTree *tree = (TTree*)f2.Get("N3HeSimTree");
+  if(!tree) return;
+  tree->Print();
+  Long64_t events = tree->GetEntries();
+
+  char var[9][50];
+  char name[1000];
+  char data[1000];
+  char cut[1000];
+  Long64_t NEvents = 0;
+  Long64_t TotalEvnts = 0;
+  Int_t ZBins = 16;
+  Int_t YBins = 9;
+  Int_t evR = 0;
+  Int_t x,y;
+
+  Float_t PEDep = 0;
+  Float_t PGFacZ = 0;
+  Float_t PGFacY = 0;
+  Float_t TEDep = 0;
+  Float_t TGFacZ = 0;
+  Float_t TGFacY = 0;
+  Float_t EDep = 0;
+  Float_t GFacZ = 0;
+  Float_t GFacY = 0;
+
+  // vector <Float_t> CellEventEdep[144]; 
+  // vector <Float_t> CellEventPEdep[144]; 
+  // vector <Float_t> CellEventTEdep[144]; 
+  // Float_t CellSumSq[144];
+  // Float_t CellMean[144];
+
+  strcpy(var[0],"N3HeSimTarDetEvent.ProtonEnergyDeposit"); 
+  strcpy(var[1],"N3HeSimTarDetEvent.TritonEnergyDeposit"); 
+  strcpy(var[2],"N3HeSimTarDetEvent.ProtonCosineZ"); 
+  strcpy(var[3],"N3HeSimTarDetEvent.ProtonCosineY"); 
+  strcpy(var[4],"N3HeSimTarDetEvent.TritonCosineZ"); 
+  strcpy(var[5],"N3HeSimTarDetEvent.TritonCosineY"); 
+  strcpy(var[6],"N3HeSimPrimEvent.OriginVertexKineticEnergy");
+  strcpy(var[7],"N3HeSimTarDetEvent.Event"); 
+  strcpy(var[8],"N3HeSimTarDetEvent.Cell"); 
+
+  TH2D *ProtonEDep = new TH2D("ProtonEDep","Proton Energy Deposit",ZBins,0,16,YBins,0,9);  
+  ProtonEDep->GetZaxis()->SetTitle("Total Energy Deposit [MeV]");
+  ProtonEDep->GetZaxis()->CenterTitle();
+  ProtonEDep->SetDirectory(0);
+
+  TH2D *ProtonGFacZ = new TH2D("ProtonGFacZ","Proton Longitudinal G-Factor",ZBins,0,16,YBins,0,9);  
+  ProtonGFacZ->GetZaxis()->SetTitle("< cos(#theta_Z) >");
+  ProtonGFacZ->GetZaxis()->CenterTitle();
+  ProtonGFacZ->SetDirectory(0);
+
+  TH2D *ProtonGFacY = new TH2D("ProtonGFacY","Proton Transverse G-Factor",ZBins,0,16,YBins,0,9);  
+  ProtonGFacY->GetZaxis()->SetTitle("< cos(#theta_Y) >");
+  ProtonGFacY->GetZaxis()->CenterTitle();
+  ProtonGFacY->SetDirectory(0);
+
+  TH2D *TritonEDep = new TH2D("TritonEDep","Triton Energy Deposit",ZBins,0,16,YBins,0,9);  
+  TritonEDep->GetZaxis()->SetTitle("Total Energy Deposit [MeV]");
+  TritonEDep->GetZaxis()->CenterTitle();
+  TritonEDep->SetDirectory(0);
+
+  TH2D *TritonGFacZ = new TH2D("TritonGFacZ","Triton Longitudinal G-Factor",ZBins,0,16,YBins,0,9);  
+  TritonGFacZ->GetZaxis()->SetTitle("< cos(#theta_Z) >");
+  TritonGFacZ->GetZaxis()->CenterTitle();
+  TritonGFacZ->SetDirectory(0);
+
+  TH2D *TritonGFacY = new TH2D("TritonGFacY","Triton Transverse G-Factor",ZBins,0,16,YBins,0,9);  
+  TritonGFacY->GetZaxis()->SetTitle("< cos(#theta_Y) >");
+  TritonGFacY->GetZaxis()->CenterTitle();
+  TritonGFacY->SetDirectory(0);
+
+  TH2D *TotalEDep = new TH2D("TotalEDep","Total Energy Deposit",ZBins,0,16,YBins,0,9);  
+  TotalEDep->GetZaxis()->SetTitle("< cos(#theta_Z) >");
+  TotalEDep->GetZaxis()->CenterTitle();
+  TotalEDep->SetDirectory(0);
+
+  TH2D *TotalGFacZ = new TH2D("TotalGFacZ","Total Longitudinal G-Factor",ZBins,0,16,YBins,0,9);  
+  TotalGFacZ->GetZaxis()->SetTitle("< cos(#theta_Z) >");
+  TotalGFacZ->GetZaxis()->CenterTitle();
+  TotalGFacZ->SetDirectory(0);
+
+  TH2D *TotalGFacY = new TH2D("TotalGFacY","Total Transverse G-Factor",ZBins,0,16,YBins,0,9);  
+  TotalGFacY->GetZaxis()->SetTitle("< cos(#theta_Y) >");
+  TotalGFacY->GetZaxis()->CenterTitle();
+  TotalGFacY->SetDirectory(0);
+
+  //TProfile *CorrPlots[
+
+
+
+  sprintf(cut,"");
+
+  for(int cl = 0; cl < 144; cl++){
+
+    y = (Int_t)(9 - floor(cl/16));
+    x = (Int_t)(cl-16*floor(cl/16))+1;
+    PEDep = 0;
+    TEDep = 0;
+    EDep  = 0;
+    PGFacZ = 0;
+    PGFacY = 0;
+    TGFacZ = 0;
+    TGFacY = 0;
+    GFacZ = 0;
+    GFacY = 0;
+    
+
+    sprintf(data,"%s[%d]:%s[%d]:%s[%d]", var[0],cl,var[2],cl,var[3],cl);
+    evR =  tree->Draw(data,cut,"goff");
+    cout << "evR =  " << evR << endl; 
+    for(int i = 0; i < evR; i++){
+   
+      PEDep += tree->GetV1()[i];
+      PGFacZ += tree->GetV1()[i]*tree->GetV2()[i]; 
+      PGFacY += tree->GetV1()[i]*tree->GetV3()[i]; 
+    }
+
+    sprintf(data,"%s[%d]:%s[%d]:%s[%d]", var[1],cl,var[4],cl,var[5],cl);
+    evR =  tree->Draw(data,cut,"goff");
+    cout << "evR =  " << evR << endl; 
+    for(int i = 0; i < evR; i++){
+   
+      TEDep += tree->GetV1()[i];
+      TGFacZ += tree->GetV1()[i]*tree->GetV2()[i]; 
+      TGFacY += tree->GetV1()[i]*tree->GetV3()[i]; 
+    }
+
+    ProtonEDep->SetBinContent(x,y,PEDep);
+    ProtonGFacZ->SetBinContent(x,y,PGFacZ/PEDep);
+    ProtonGFacY->SetBinContent(x,y,PGFacY/PEDep);
+
+    TritonEDep->SetBinContent(x,y,TEDep);
+    TritonGFacZ->SetBinContent(x,y,TGFacZ/TEDep);
+    TritonGFacY->SetBinContent(x,y,TGFacY/TEDep);
+
+    TotalEDep->SetBinContent(x,y,PEDep + TEDep);
+    TotalGFacZ->SetBinContent(x,y,(PGFacZ + TGFacZ)/(PEDep+TEDep));
+    TotalGFacY->SetBinContent(x,y,(PGFacY + TGFacY)/(PEDep+TEDep));
+   
+  }
+  f2.Close();
+
+  // for(int m = 0; m < 144; m++){
+  //   y = (Int_t)(9 - floor(m/16));
+  //   x = (Int_t)(m-16*floor(m/16))+1;
+  //   ProtonEDep->SetBinContent(x,y,BinCont[m]);
+  // }
+  // TCanvas *c1 = new TCanvas();
+  // ProtonEDep->Draw("colz");
+  // TCanvas *c2 = new TCanvas();
+  // TritonEDep->Draw("colz");
+    
+  TFile f1("N3HeSimResults.root","RECREATE");
+  
+  ProtonEDep->Write();
+  ProtonGFacZ->Write();
+  ProtonGFacY->Write();
+
+  TritonEDep->Write(); 
+  TritonGFacZ->Write();
+  TritonGFacY->Write();
+  
+  TotalEDep->Write(); 
+  TotalGFacZ->Write();
+  TotalGFacY->Write();
+   
+  f1.Close();
+
+  
+}
+
+
+//Below code needed for matrix inversion. Taken from Numerical Recipes. 
+

@@ -1,0 +1,47 @@
+#include 
+
+TH1D  *EDepMap = new TH2D("EDepMap", "", 16, 0, 16, 9, 0, 9);
+TTree *dTree = (TTree*)_file0->Get("N3HeSimTree");
+
+void PlotEventEDepMap(Int_t evnt)
+{
+  if(!EDepMap) return;
+  if(ev < 0) return;
+  if(ev >= dCaptureEvents) return;
+
+  EDepMap->Reset();
+
+  dMainEvent = 0;
+  dTree->SetBranchAddress("N3HeData",&dMainEvent);
+  Double_t edep_p = 0;
+  Double_t edep_t = 0;
+  Int_t vertCell, x, y;
+
+  for(int n = 1; n <= 144; n++){
+
+    edep_p = 0;
+    edep_t = 0;
+
+    y = (Int_t)(9 - floor((n-1)/16));
+    x = ((n-1)-(Int_t)(16*floor((n-1)/16)))+1;
+
+    vertCell = dMainEvent->N3HeSimTarDetEvent.cellData[n-1].VertexCell;
+
+    if(vertCell > 0 && vertCell <= 144){
+
+      edep_p = dMainEvent->N3HeSimTarDetEvent.cellData[n-1].ProtonEnergyDeposit; 
+      edep_t = dMainEvent->N3HeSimTarDetEvent.cellData[n-1].TritonEnergyDeposit;
+ 
+      EDepMap->SetBinContent(x,y,edep_p);
+      EDepMap->SetBinContent(x,y,edep_t);
+
+      y = (Int_t)(9 - floor((vertCell-1)/16));
+      x = ((vertCell-1)-(Int_t)(16*floor((vertCell-1)/16)))+1;
+    
+      EDepMap->SetBinContent(x,y,1.0);
+  
+    }
+  }
+
+  EDepMap->Draw("colz");
+}

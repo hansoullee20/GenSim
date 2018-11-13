@@ -1,0 +1,47 @@
+#
+# Macro file for the initialization phase of "exampleN02.cc"
+# when runing in interactive mode
+#
+# Sets some default verbose
+#
+
+#==========================
+# Target related
+#==========================
+/TarDet/SetCenterPositionInX  0.0 cm
+/TarDet/SetCenterPositionInY  0.0 cm
+/TarDet/SetCenterPositionInZ  20.0 cm
+#/TarDet/SetMaterial   Vacuum
+#/TarDet/SetMaterial   HeLiquid
+#/TarDet/SetMaterial    N3HeTDGas
+#/TarDet/SetMaterial    He3Gas
+
+
+/N3He/PrimaryGenerator/ResetNtupleEventCounter 0
+/RunAction/SetID 110
+/TarDet/SetCollimatorLowX -5
+/TarDet/SetCollimatorHighX 5
+/TarDet/SetCollimatorLowY -4.1 
+/TarDet/SetCollimatorHighY 4.1
+/TarDet/SetCollimatorSize -0.8
+/TarDet/SetPressure 0.476   
+#/random/setSeeds 389354 2354987
+/run/beamOn 100000
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

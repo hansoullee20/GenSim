@@ -1,0 +1,162 @@
+#----------------------------------------------------------------------------
+
+# Setup the project
+#
+cmake_minimum_required(VERSION 2.6 FATAL_ERROR)
+project(N3HESIM)
+
+
+#ROOT path
+set(CMAKE_MODULE_PATH "${CMAKE_SOURCE_DIR}/cmake/Modules")
+find_package(ROOT REQUIRED)
+
+# Update header file
+#add_custom_target( gitinfo ALL COMMAND ${PROJECT_SOURCE_DIR}/pullgitinfo.py ${PROJECT_SOURCE_DIR} COMMENT "Creating gitinfo.hh" )
+
+
+# this is to ensure we find the header we need
+include_directories(${CMAKE_CURRENT_BINARY_DIR}/include)
+
+#ROOT_GENERATE_DICTIONARY(
+#    N3HeSimDict                        # path to dictionary to generate
+#    "include/N3HeSimPrimaryEvent.hh"         # list of classes to process
+#    "include/N3HeSimTargetEvent.hh"
+#    "include/N3HeSimBeamMonitorEvent.hh"
+#    "include/N3HeSimMainEvent.hh"
+#    "include/N3HeSimPrimaryEventGenerator.hh"
+#    LINKDEF "include/N3HeSimLinkDef.hh"  # ROOT linkDef file
+#)
+
+ROOT_GENERATE_DICTIONARY(
+    N3HeSimPrimaryEventDict                  # path to dictionary to generate
+    "include/N3HeSimPrimaryEvent.hh"         # list of classes to process
+    LINKDEF "include/N3HeSimPrimaryEvent_LinkDef.hh"  # ROOT linkDef file
+)
+ROOT_GENERATE_DICTIONARY(
+    N3HeSimTargetEventDict
+    "include/N3HeSimTargetEvent.hh"
+    LINKDEF "include/N3HeSimTargetEvent_LinkDef.hh"
+)
+ROOT_GENERATE_DICTIONARY(
+    N3HeSimCellDataDict
+    "include/N3HeSimCellData.hh"
+    LINKDEF "include/N3HeSimCellData_LinkDef.hh"
+)
+ROOT_GENERATE_DICTIONARY(
+    N3HeSimBeamMonitorEventDict
+    "include/N3HeSimBeamMonitorEvent.hh"
+    LINKDEF "include/N3HeSimBeamMonitorEvent_LinkDef.hh"
+)
+ROOT_GENERATE_DICTIONARY(
+    N3HeSimMainEventDict
+    "include/N3HeSimMainEvent.hh"
+    LINKDEF "include/N3HeSimMainEvent_LinkDef.hh"
+)
+ROOT_GENERATE_DICTIONARY(
+    N3HeSimPrimaryEventGeneratorDict
+    "include/N3HeSimPrimaryEventGenerator.hh"
+    LINKDEF "include/N3HeSimPrimaryEventGenerator_LinkDef.hh"  # ROOT linkDef file
+)
+
+
+#----------------------------------------------------------------------------
+# Find Boost libraries, in particular iostreams
+
+if(USE_BOOST)
+    find_package(Boost COMPONENTS iostreams)
+    include_directories(${Boost_INCLUDE_DIRS})
+    link_directories(${Boost_LIBRARY_DIR})
+    ADD_DEFINITIONS(-D__USE_BOOST)
+    if(Boost_IOSTREAMS_FOUND)
+        ADD_DEFINITIONS(-D__USE_BOOST_IOSTREAMS)
+    endif()
+endif()
+
+
+#----------------------------------------------------------------------------
+# Find Geant4 package, activating all available UI and Vis drivers by default
+# You can set WITH_GEANT4_UIVIS to OFF via the command line or ccmake/cmake-gui
+# to build a batch mode only executable
+#
+option(WITH_GEANT4_UIVIS "Build example with Geant4 UI and Vis drivers" ON)
+if(WITH_GEANT4_UIVIS)
+  find_package(Geant4 REQUIRED ui_all vis_all)
+else()
+  find_package(Geant4 REQUIRED)
+endif()
+
+#----------------------------------------------------------------------------
+# Setup Geant4 include directories and compile definitions
+# Setup include directory for this project
+#
+include(${Geant4_USE_FILE})
+
+
+#debugging symbols, complains
+set(CMAKE_CXX_FLAGS "-g -Wall -pg")
+
+#----------------------------------------------------------------------------
+# Generate dictionaries as well (so we can write objects to ROOT files
+
+include_directories(${PROJECT_SOURCE_DIR}/include ${ROOT_INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR}/include)
+
+
+#----------------------------------------------------------------------------
+# Locate sources and headers for this project
+# NB: headers are included so they will show up in IDEs
+#
+file(GLOB sources ${PROJECT_SOURCE_DIR}/src/N3HeSim*.cc)
+#file(GLOB headers ${PROJECT_SOURCE_DIR}/include/*.hh ${CMAKE_CURRENT_BINARY_DIR}/include/gitinfo.hh)
+
+file(GLOB libsources ${PROJECT_SOURCE_DIR}/src/N3HeSimPrimaryEvent.cc ${PROJECT_SOURCE_DIR}/src/N3HeSimTargetEvent.cc ${PROJECT_SOURCE_DIR}/src/N3HeSimBeamMonitorEvent.cc ${PROJECT_SOURCE_DIR}/src/N3HeSimMainEvent.cc ${PROJECT_SOURCE_DIR}/src/N3HeSimPrimaryEventGenerator.cc)
+file(GLOB libheaders ${PROJECT_SOURCE_DIR}/include/*.hh)
+
+#----------------------------------------------------------------------------
+# Add the executable, and link it to the Geant4 libraries
+#
+add_executable(N3HeSim N3HeSim.cc ${sources} ${headers} N3HeSimMainEventDict.cxx N3HeSimPrimaryEventGeneratorDict.cxx N3HeSimTargetEventDict.cxx N3HeSimCellDataDict.cxx N3HeSimBeamMonitorEventDict.cxx N3HeSimPrimaryEventDict.cxx)
+add_library(libN3HeSim SHARED ${libsources} ${libheaders} N3HeSimMainEventDict.cxx N3HeSimPrimaryEventGeneratorDict.cxx N3HeSimTargetEventDict.cxx N3HeSimCellDataDict.cxx N3HeSimBeamMonitorEventDict.cxx N3HeSimPrimaryEventDict.cxx)
+target_link_libraries(N3HeSim ${Geant4_LIBRARIES} ${ROOT_LIBRARIES} ${Boost_LIBRARIES} )
+target_link_libraries(libN3HeSim ${ROOT_LIBRARIES} ${Boost_LIBRARIES} )
+
+#----------------------------------------------------------------------------
+# Copy all scripts to the build directory, i.e. the directory in which we
+# build remoll. This is so that we can run the executable directly because it
+# relies on these scripts being in the current working directory.
+#
+
+#FILE( GLOB REMOLL_GEO "geometry/*" )
+
+set(N3HESIM_SCRIPTS
+  macros/myRun.mac
+  macros/vis.mac
+  macros/gui.mac
+  macros/Qt.mac
+  scripts/PlotAngZDep.C
+  scripts/PlotNeutMFP.C
+  scripts/Spectrum.C
+  scripts/N3HeDilution.C
+  Chamber.gdml
+  SNSBeamSpectrum_Measured.txt
+  )
+
+foreach(_script ${N3HESIM_SCRIPTS})
+  configure_file(
+    ${PROJECT_SOURCE_DIR}/${_script}
+    ${PROJECT_BINARY_DIR}/${_script}
+    COPYONLY
+    )
+endforeach()
+
+#----------------------------------------------------------------------------
+# For internal Geant4 use - but has no effect if you build this
+# example standalone
+#
+add_custom_target(N3HESIM DEPENDS N3HeSim)
+
+#----------------------------------------------------------------------------
+# Install the executable to 'bin' directory under CMAKE_INSTALL_PREFIX
+#
+install(TARGETS N3HeSim DESTINATION bin)
+
+

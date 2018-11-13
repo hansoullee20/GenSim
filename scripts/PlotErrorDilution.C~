@@ -1,0 +1,22 @@
+void plot(char *filename)
+{
+
+  FILE *fp = fopen(filename,"r");
+  if(!fp) return;
+
+  Double_t v[7];
+
+  Double_t EssqY = 0;
+  Double_t EssqZ = 0;
+  Double_t EmsY = 0;
+  Double_t EmsZ = 0;
+  
+  Double_t DssqY = 0;
+  Double_t DssqZ = 0;
+  Double_t DmsY = 0;
+  Double_t DmsZ = 0;
+  
+  TGraph *DilGr = new TGraph();
+
+
+}
